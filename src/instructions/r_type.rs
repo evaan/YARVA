@@ -1,7 +1,16 @@
 use crate::print_error;
 
 pub fn parse_r_type(instruction: &str, rs2: u8, rs1: u8, rd: u8, opcode: u8, line: usize) {
-  let (func3, func7): (u8, u8) = match opcode {
+  let mut parts = instruction.split('.');
+  let first = parts.next().unwrap_or("");
+  let second = parts.next();
+
+  let base: &str = match second {
+      Some(s) => &instruction[..first.len() + 1 + s.len()],
+      None => first,
+  };
+
+  let (func3, mut func7): (u8, u8) = match opcode {
     51 => {
       match instruction {
         "add" => (0, 0),
@@ -28,11 +37,37 @@ pub fn parse_r_type(instruction: &str, rs2: u8, rs1: u8, rd: u8, opcode: u8, lin
         }
       }
     }
+    47 => {
+      match base {
+        "lr.w"      => (2, 8),
+        "sc.w"      => (2, 12),
+        "amoswap.w" => (2, 4),
+        "amoadd.w"  => (2, 0),
+        "amoand.w"  => (2, 48),
+        "amoor.w"   => (2, 40),
+        "amoxor.w"  => (2, 16),
+        "amomax.w"  => (2, 80),
+        "amomin.w"  => (2, 64),
+        _ => {
+          print_error(&format!("Invalid instruction '{}' at line {}", instruction, line));
+          (0, 0)
+        }
+      }
+    }
     _ => {
       print_error(&format!("Invalid opcode '{}' at line {}", opcode, line));
       (0, 0)
     }
   };
+
+  if opcode == 47 {
+    if instruction.contains(".aq") {
+      func7 += 2;
+    }
+    if instruction.contains(".rl") {
+      func7 += 1;
+    }
+  }
 
   println!("{:08x}", u32::from_str_radix(&format!("{:07b}{:05b}{:05b}{:03b}{:05b}{:07b}", func7, rs2, rs1, func3, rd, opcode), 2).expect("Invalid binary string"));
 }
