@@ -55,6 +55,36 @@ fn main() {
                 let rd: u8 = parse_register(instruction_parts[1], i+1);
                 parse_i_type(&instruction_parts[0], imm, rs1, rd, 19, i+1);
             }
+            "jalr" => {
+                if instruction_parts.len() == 4 {
+                    let rd: u8 = parse_register(instruction_parts[1], i+1);
+                    let offset: i16 = parse_12_bit_immediate(instruction_parts[2], i+1);
+                    let rs1_str = instruction_parts[3].strip_prefix("(").and_then(|s| s.strip_suffix(")")).unwrap_or(instruction_parts[3]);
+                    let rs1: u8 = parse_register(rs1_str, i+1);
+                    parse_i_type(&instruction_parts[0], offset, rs1, rd, 103, i+1); 
+                }
+                else if instruction_parts.len() == 3 {
+                    let rd: u8 = parse_register(instruction_parts[1], i + 1);
+                    let offset_rs1_split: Vec<&str> = instruction_parts[2].split('(').collect();
+                    if offset_rs1_split.len() != 2 {
+                        print_error(&format!("Invalid syntax on line {}", i + 1));
+                    }
+
+                    let offset: i16 = parse_12_bit_immediate(offset_rs1_split[0], i + 1);
+                    let rs1_str = offset_rs1_split[1]
+                        .strip_suffix(")")
+                        .unwrap_or_else(|| {
+                            print_error(&format!("Missing ')' on line {}", i + 1));
+                            ""
+                        });
+                    let rs1: u8 = parse_register(rs1_str, i + 1);
+
+                    parse_i_type(&instruction_parts[0], offset, rs1, rd, 103, i + 1);
+                }
+                else {
+                    print_error(&format!("Invalid syntax on line {}", i+1));
+                }
+            }
             "lb" | "lh" | "lw" | "lbu" | "lhu" => {
                 if instruction_parts.len() != 3 {
                     print_error(&format!("Invalid syntax on line {}", i+1));

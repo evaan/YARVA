@@ -51,6 +51,9 @@ pub fn parse_i_type(instruction: &str, mut imm: i16, rs1: u8, rd: u8, opcode: u8
         115 => { //111011
             0
         }
+        103 => { //1100111
+            0
+        }
         _ => {
             print_error(&format!("Invalid opcode '{}' at line {}", opcode, line));
             0
