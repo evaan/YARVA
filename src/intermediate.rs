@@ -28,3 +28,28 @@ pub fn parse_12_bit_immediate(imm: &str, line: usize) -> i16 {
         }
     }
 }
+
+pub fn parse_20_bit_immediate(imm: &str, line: usize) -> i32 {
+    let parsed = if imm.to_lowercase().starts_with("0x") {
+        u32::from_str_radix(&imm[2..], 16)
+            .map(|val| val as i32)
+    } else {
+        // Try parsing as signed decimal
+        imm.parse::<i32>()
+    };
+
+    match parsed {
+        Ok(n) => {
+          if n >= -524288 && n <= 524287 {
+            n
+            } else {
+                print_error(&format!("Immediate {} out of range (-524288 to 524287) on line {}", imm, line));
+                0
+            }
+        }
+        Err(_) => {
+            print_error(&format!("Invalid immediate '{}' on line {}", imm, line));
+            0
+        }
+    }
+}
