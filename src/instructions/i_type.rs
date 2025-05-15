@@ -1,6 +1,6 @@
 use crate::print_error;
 
-pub fn parse_i_type(instruction: &str, mut imm: i16, rs1: u8, rd: u8, opcode: u8, line: usize) {
+pub fn parse_i_type(instruction: &str, rd: u8, rs1: u8, mut imm: i16, opcode: u8, line: usize) {
     let func3: u8 = match opcode {
         19 => { //0010011
             match instruction {
@@ -30,8 +30,7 @@ pub fn parse_i_type(instruction: &str, mut imm: i16, rs1: u8, rd: u8, opcode: u8
                     5
                 }
                 _ => {
-                    print_error(&format!("Invalid instruction '{}' at line {}", instruction, line));
-                    0
+                    unreachable!();
                 }
             }
         }
@@ -43,8 +42,7 @@ pub fn parse_i_type(instruction: &str, mut imm: i16, rs1: u8, rd: u8, opcode: u8
                 "lbu" => 4,
                 "lhu" => 5,
                 _ => {
-                    print_error(&format!("Invalid instruction '{}' at line {}", instruction, line));
-                    0
+                    unreachable!();
                 }
             }
         }
@@ -55,8 +53,7 @@ pub fn parse_i_type(instruction: &str, mut imm: i16, rs1: u8, rd: u8, opcode: u8
             0
         }
         _ => {
-            print_error(&format!("Invalid opcode '{}' at line {}", opcode, line));
-            0
+            unreachable!();
         }
     };
 
