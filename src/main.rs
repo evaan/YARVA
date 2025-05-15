@@ -18,7 +18,6 @@ fn print_error(error: &str) {
 
 fn print_warning(error: &str) {
     println!("\x1b[93mwarning:\x1b[0m {}", error);
-    std::process::exit(1);
 }
 
 fn main() {
