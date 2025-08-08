@@ -1,15 +1,15 @@
 mod register;
-mod intermediate;
+mod immediate;
 mod instructions;
 
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 use std::fs::read_to_string;
-use crate::instructions::i_type::parse_i_type;
+use crate::instructions::{i_type::parse_i_type, j_type::parse_j_type, s_type::parse_s_type};
 use instructions::{b_type::parse_b_type, r_type::parse_r_type, u_type::parse_u_type};
 use register::parse_register;
-use intermediate::{parse_12_bit_immediate, parse_13_bit_immediate, parse_20_bit_immediate};
+use immediate::{parse_12_bit_immediate, parse_13_bit_immediate, parse_20_bit_immediate};
 
 fn print_error(error: &str) {
     println!("\x1b[91merror:\x1b[0m {}", error);
@@ -49,6 +49,7 @@ fn main() {
             match trimmed_line {
                 ".text" => {}
                 //TODO: add .global
+                //TODO: data parsing, constants for values
                 _ => {
                     print_warning(&format!("Unsupported directive '{}' on line {}", trimmed_line, i+1));
                 }
@@ -78,47 +79,58 @@ fn main() {
         let lowered_line: String = trimmed_line.to_lowercase();
         let instruction_line: &str = &lowered_line.replace(",", " ").replace("(", " ").replace(")", "");
         let instruction_args: Vec<&str> = instruction_line.trim().split_whitespace().collect();
+        //TODO: make sure in .text before parsing instructions
+        let mut instruction: u32 = 0;
         match instruction_args[0] {
-            "add" | "sub" | "xor" | "or" | "and" | "sll" | "srl" | "sra" | "slt" | "sltu" => { //base R-types
+            "add" | "sub" | "xor" | "or" | "and" | "sll" | "srl" | "sra" | "slt" | "sltu" | "mul" | "mulh" | "mulhsu" | "mulhu" | "div" | "divu" | "rem" | "remu" => { //base R-types
                 if instruction_args.len() != 4 {
                     print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
                 }
                 let rd: u8 = parse_register(instruction_args[1], i+1);
+                if rd == 0 {
+                    print_warning(&format!("Zero register written to on line {}", i+1));
+                }
                 let rs1: u8 = parse_register(instruction_args[2], i+1);
                 let rs2: u8 = parse_register(instruction_args[3], i+1);
-                parse_r_type(instruction_args[0], rd, rs1, rs2, 51, i+1);
+                instruction = parse_r_type(instruction_args[0], rd, rs1, rs2, 51, i+1);
             },
             "addi" | "xori" | "ori" | "andi" | "slli" | "srli" | "srai" | "slti" | "sltiu" => { //base I-types w/o offset
                 if instruction_args.len() != 4 {
                     print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
                 }
                 let rd: u8 = parse_register(instruction_args[1], i+1);
-                //TODO: warn about registers that shouldn't be written to
+                if rd == 0 {
+                    print_warning(&format!("Zero register written to on line {}", i+1));
+                }
                 let rs1: u8 = parse_register(instruction_args[2], i+1);
-                let imm: i16 = parse_12_bit_immediate(instruction_args[3], i+1);
-                parse_i_type(instruction_args[0], rd, rs1, imm, 19, i+1);
+                let imm: i16 = parse_12_bit_immediate(instruction_args[3], i+1, instruction_args[0].ends_with("u"));
+                instruction = parse_i_type(instruction_args[0], rd, rs1, imm, 19, i+1);
+                //ensure sp is being moved correctly
             },
             "lb" | "lh" | "lw" | "lbu" | "lhu" | "jalr" => { //base I-types w/ offset
                 let opcode: u8 = match instruction_args[0] {
                     "lb" | "lh" | "lw" | "lbu" | "lhu" => 3,
-                    "jalr" => 103,
+                    "jalr" => 103, //TODO: jalr alignment check?
                     _ => unreachable!()
                 };
                 if instruction_args.len() != 4 {
                     print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
                 }
                 let rd: u8 = parse_register(instruction_args[1], i+1);
-                let offset: i16 = parse_12_bit_immediate(instruction_args[2], i+1);
+                if rd == 0 {
+                    print_warning(&format!("Zero register written to on line {}", i+1));
+                }
+                let offset: i16 = parse_12_bit_immediate(instruction_args[2], i+1, instruction_args[0].ends_with("u"));
                 let rs1: u8 = parse_register(instruction_args[3], i+1);
-                parse_i_type(instruction_args[0], rd, rs1, offset, opcode, i+1);
+                instruction = parse_i_type(instruction_args[0], rd, rs1, offset, opcode, i+1);
             },
             "ecall" => {
-                println!("00000073")
+                instruction = 0x00000073;
             },
             "ebreak" => {
-                println!("00100073")
+                instruction = 0x00100073;
             },
-            "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" => {
+            "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" => { // B-type instructions
                 if instruction_args.len() != 4 {
                     print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
                 }
@@ -131,9 +143,9 @@ fn main() {
                     },
                     _ => parse_13_bit_immediate(instruction_args[3], i+1)
                 };
-                parse_b_type(instruction_args[0], rs1, rs2, offset, 99, i+1);
-            }
-            "lui" | "auipc" => {
+                instruction = parse_b_type(instruction_args[0], rs1, rs2, offset, 99, i+1);
+            },
+            "lui" | "auipc" => { // U-Type instructions
                 if instruction_args.len() != 3 {
                     print_error(&format!("Invalid instruction '{}' on line {}", line, i+1)); 
                 }
@@ -144,12 +156,56 @@ fn main() {
                 };
                 let imm: i32 = parse_20_bit_immediate(instruction_args[2], i+1);
                 let rd: u8 = parse_register(instruction_args[1], i+1);
-                parse_u_type(imm, rd, opcode);
+                instruction = parse_u_type(imm, rd, opcode);
+            },
+            "jal" => {
+                if instruction_args.len() != 3 {
+                    print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
+                }
+                let imm: i32 = parse_20_bit_immediate(instruction_args[2], i+1);
+                let rd: u8 = parse_register(instruction_args[1], i+1);
+                instruction = parse_j_type(imm, rd, i+1);
+            },
+            "sb" | "sh" | "sw" => { //S-types
+                if instruction_args.len() != 4 {
+                    print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
+                }
+                let rs1: u8 = parse_register(instruction_args[1], i+1);
+                let rs2: u8 = parse_register(instruction_args[3], i+1);
+                let imm: i16 = parse_12_bit_immediate(instruction_args[2], i+1, instruction_args[0].ends_with("u"));
+                //TODO: unsure if this needs warnings
+                instruction = parse_s_type(instruction_args[0], rs1, rs2, imm, 35);
+            }
+            //pseudo-instructions
+            "nop" => {
+                instruction = 0x00000013;
+            }
+            "mv" => {
+                if instruction_args.len() != 3 {
+                    print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
+                }
+                let rd: u8 = parse_register(instruction_args[1], i+1);
+                let rs: u8 = parse_register(instruction_args[2], i+1);
+                instruction = parse_i_type("addi", rd, rs, 0, 19, i+1);
+            }
+            "li" => {
+                if instruction_args.len() != 3 {
+                    print_error(&format!("Invalid instruction '{}' on line {}", line, i+1));
+                }
+                let rd: u8 = parse_register(instruction_args[0], i+1);
+                let imm: i32 = parse_20_bit_immediate(instruction_args[2], i+1);
+                if imm < -2048 || imm > 2047 {
+                    instruction = parse_u_type(imm >> 12, rd, 55) << 32;
+                }
+                println!("{:08x}", instruction);
+                let lower_imm: i16 = (imm & 0xFFF) as i16;
+                instruction = parse_i_type("addi", rd, 0, lower_imm, 51, i+1);
             }
             _ => {
                 print_error(&format!("Invalid instruction '{}' on line {}", instruction_args[0], i+1));
             }
         }
+        println!("{:08x}", instruction);
         current_memory_address += 4;
     }
 }

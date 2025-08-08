@@ -1,6 +1,6 @@
 use crate::print_error;
 
-pub fn parse_b_type(instruction: &str, rs1: u8, rs2: u8, offset: i16, opcode: u8, line: usize) {
+pub fn parse_b_type(instruction: &str, rs1: u8, rs2: u8, offset: i16, opcode: u8, line: usize) -> u32 {
     let func3: u8 = match opcode {
         99 => { //1100011
             match instruction {
@@ -24,10 +24,14 @@ pub fn parse_b_type(instruction: &str, rs1: u8, rs2: u8, offset: i16, opcode: u8
         print_error(&format!("Offset {} is not 2-byte aligned on line {}", offset, line));
     }
 
-    let imm_12 = offset >> 12 & 1;
-    let imm_11 = offset >> 11 & 1;
-    let imm_10_5 = offset >> 5 & 63;
-    let imm_4_1 = (offset & 31) >> 1;
+    let instruction = (((offset as u32 >> 12) & 0x1) << 31)
+        | (((offset as u32 >> 5) & 0x3F) << 25)
+        | ((rs2 as u32) << 20)
+        | ((rs1 as u32) << 15)
+        | ((func3 as u32) << 12)
+        | (((offset as u32 >> 1) & 0xF) << 8)
+        | (((offset as u32 >> 11) & 0x1) << 7)
+        | (opcode as u32);
 
-    println!("{:08x}", u32::from_str_radix(&format!("{:01b}{:06b}{:05b}{:05b}{:03b}{:04b}{:01b}{:07b}", imm_12, imm_10_5, rs2, rs1, func3, imm_4_1, imm_11, opcode), 2).expect("Invalid binary string"));
+    return instruction;
 }

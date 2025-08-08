@@ -1,6 +1,6 @@
 use crate::print_error;
 
-pub fn parse_r_type(instruction: &str, rd: u8, rs1: u8, rs2: u8, opcode: u8, line: usize) {
+pub fn parse_r_type(instruction: &str, rd: u8, rs1: u8, rs2: u8, opcode: u8, line: usize) -> u32 {
 	let mut parts = instruction.split('.');
 	let first = parts.next().unwrap_or("");
 	let second = parts.next();
@@ -68,5 +68,12 @@ pub fn parse_r_type(instruction: &str, rd: u8, rs1: u8, rs2: u8, opcode: u8, lin
 		}
 	}
 
-	println!("{:08x}", u32::from_str_radix(&format!("{:07b}{:05b}{:05b}{:03b}{:05b}{:07b}", func7, rs2, rs1, func3, rd, opcode), 2).expect("Invalid binary string"));
+	let instruction = ((func7 as u32) << 25)
+		| ((rs2 as u32) << 20)
+		| ((rs1 as u32) << 15)
+		| ((func3 as u32) << 12)
+		| ((rd as u32) << 7)
+		| (opcode as u32);
+
+	return instruction;
 }
